@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 from timer import Timer
-from tifffile import TiffFile
+
 # import
 
 # with open("video_params.txt", 'r') as params:

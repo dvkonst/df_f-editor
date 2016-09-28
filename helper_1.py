@@ -1,11 +1,15 @@
 import numpy as np
-import pickle
-print("original")
-with open("video/video_v_16.pickle", 'rb') as file:
-    print(pickle.load(file))
-print("rel")
-with open("video/rel_video_16.pickle", 'rb') as file:
-    print(pickle.load(file))
-print("dff")
-with open("video/dff_video_16.pickle", 'rb') as file:
-    print(pickle.load(file))
+from tifffile import TiffFile
+# '''
+with TiffFile('video/CA1_10_20160915_151232.tif_cropped.tif') as tif:
+    # print(tif.pages, tif.size, sep='\n')
+    print(tif.__len__(), type(tif.__len__()))
+    # print(tif.__str__(), type(tif.__str__()))
+    print(tif.filename)
+    pass
+# '''
+# '''
+files = open("*.txt")
+print(files)
+# '''
+print()
