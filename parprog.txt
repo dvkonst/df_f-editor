@@ -1,0 +1,112 @@
+import logging
+from datetime import datetime as dt
+from operator import itemgetter
+import csv
+
+import numpy as np
+
+from itertools import chain
+
+from joblib import Parallel, delayed
+
+# INPUT_FILE = r'D:\Downloads\kinetics_C_short.fa'
+# ANCHOR = 5
+INPUT_FILE = r'D:\Downloads\kinetics_C_full.fa'
+OUTPUT_FILE = r'D:\Downloads\kinetics_result.csv'
+ANCHOR = 20
+MIN_LENGTH = 4
+THRESHOLD = 0.005
+
+
+def gen_indices(length):
+    def anchored_idx():
+        for from_i in range(ANCHOR + 1):
+            for till_i in range(length, max(from_i + MIN_LENGTH, ANCHOR + 1) - 1, -1):
+                yield from_i, till_i
+
+    def not_anchored_idx(from_i, till_i):
+        for s in range(from_i, till_i - 1):
+            for e in range(s + 1, till_i):
+                yield s, e
+
+    for start, end in anchored_idx():
+        yield (start, end),
+        if start > 1:
+            for s, e in not_anchored_idx(0, start - 1):
+                yield (s, e), (start, end)
+        if end < length - 1:
+            for s, e in not_anchored_idx(end + 1, length):
+                yield (start, end), (s, e)
+
+
+def count_motifs(lines, *indices):
+    size = lines.shape[0]
+    threshold_n = size * THRESHOLD
+    length = lines.shape[1]
+
+    if len(indices) == 1:
+        start, end = indices[0]
+        if end < lines.shape[1]:
+            dt_params = dict(names=['items', ''],
+                             formats=[(np.void, end - start), (np.void, length - end)],
+                             offsets=[start, end])
+        else:
+            dt_params = dict(names=['items'],
+                             formats=[(np.void, end - start)],
+                             offsets=[start])
+        a = lines.view(np.dtype(dt_params))['items']
+    else:
+        (s1, e1), (s2, e2) = indices
+        idx = np.hstack((np.arange(s1, e1), np.arange(s2, e2)))
+        a = np.ascontiguousarray(lines[:, idx]).view((np.void, lines.dtype.itemsize * idx.size))
+
+    values, counts = np.unique(a, return_counts=True)
+    c = (counts >= threshold_n)
+    # counts_str = np.char.mod('%.3f', counts[c] / size)
+    counts = counts[c] / size
+
+    result = []
+    for value, count in zip(values[c], counts):
+        v = value.tobytes().decode()
+        if len(indices) == 1:
+            result.append((count, ' ' * start + v + ' ' * (length - end)))
+        else:
+            # assert len(v[s1:e1]) == e1 - s1 and len(v[s2:e2]) == e2 - s2
+            result.append((count, ' ' * s1 + v[:e1 - s1] + ' ' * (s2 - e1) + v[e1 - s1:] + ' ' * (length - e2)))
+    return result
+
+
+def v2(lines):
+    length = lines.shape[1]
+
+    results = Parallel(n_jobs=4)(delayed(count_motifs)(lines, *i) for i in gen_indices(length))
+    return sorted(chain.from_iterable(results), key=itemgetter(0))
+
+
+def main():
+    logging.basicConfig(format='[%(asctime)s] %(message)s', level=logging.DEBUG)
+
+    logging.info('Reading %s', INPUT_FILE)
+    start = dt.now()
+    with open(INPUT_FILE, 'rb') as f:
+        lines = np.array([bytearray(l.strip()) for l in f if not l.startswith(b'>')])
+    logging.info('Finished: %s', dt.now() - start)
+
+    # ANCHOR = 15
+    # lines = lines[:200, 5:-10].copy()
+
+    assert len(set(l[ANCHOR] for l in lines)) == 1
+    assert len(set(len(l) for l in lines)) == 1
+
+    logging.info('Computing common k-mers')
+    start = dt.now()
+    result = v2(lines)
+    logging.info('Finished: %s', dt.now() - start)
+
+    with open(OUTPUT_FILE, 'w', newline='') as fo:
+        writer = csv.writer(fo, quotechar='|', quoting=csv.QUOTE_NONNUMERIC)
+        writer.writerows((('{:.6f}'.format(c), v) for c, v in result))
+
+
+if __name__ == '__main__':
+    main()
