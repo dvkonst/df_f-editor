@@ -51,15 +51,16 @@ def main():
         j = 0
         for file_name in files:
             print("begin round")
-            with Timer() as time_round, TiffWriter('video_out/' + name, bigtiff=True) as tif,\
-                    TiffFile(file_name) as full_file:
-                num_pages = full_file.__len__()
-                n_iter = range(num_pages)
-                for n in n_iter:
-                    tif.save((np.around(
-                        np.multiply(np.subtract(np.true_divide(
-                            full_file[n].asarray(), sum_pages_list[j]), min_val), const_1))
-                            ).astype(np.uint16))
+            with Timer() as time_round, TiffFile(file_name) as full_file:
+                name = full_file.filename
+                with TiffWriter('video_out/' + name, bigtiff=True) as tif:
+                    num_pages = full_file.__len__()
+                    n_iter = range(num_pages)
+                    for n in n_iter:
+                        tif.save((np.around(
+                            np.multiply(np.subtract(np.true_divide(
+                                full_file[n].asarray(), sum_pages_list[j]), min_val), const_1))
+                                ).astype(np.uint16))
             j += 1
             print("time_round", time_round.secs)
 
